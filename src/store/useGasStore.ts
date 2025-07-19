@@ -15,21 +15,34 @@ interface ChainGasData {
   history: GasPoint[]
 }
 
+interface SimulatedCost {
+  gasUsed: number
+  totalUsdCost: number
+}
+
 interface GasStoreState {
   mode: 'live' | 'simulation'
   chains: Record<Chain, ChainGasData>
   usdPrice: number
   txValue: number
+  simulatedCosts: Record<Chain, SimulatedCost>
+
   updateChainData: (chain: Chain, data: { baseFee: number; priorityFee: number }) => void
   setUsdPrice: (price: number) => void
   setTxValue: (value: number) => void
   setMode: (mode: 'live' | 'simulation') => void
+  updateSimulatedCost: (chain: Chain, cost: SimulatedCost) => void
 }
 
 export const useGasStore = create<GasStoreState>((set, get) => ({
   mode: 'live',
   usdPrice: 0,
   txValue: 0,
+  simulatedCosts: {
+    ethereum: { gasUsed: 21000, totalUsdCost: 0 },
+    polygon: { gasUsed: 21000, totalUsdCost: 0 },
+    arbitrum: { gasUsed: 21000, totalUsdCost: 0 },
+  },
   chains: {
     ethereum: { baseFee: 0, priorityFee: 0, history: [] },
     polygon: { baseFee: 0, priorityFee: 0, history: [] },
@@ -57,6 +70,13 @@ export const useGasStore = create<GasStoreState>((set, get) => ({
   setUsdPrice: (price) => set({ usdPrice: price }),
   setTxValue: (value) => set({ txValue: value }),
   setMode: (mode) => set({ mode }),
+  updateSimulatedCost: (chain, cost) =>
+    set((state) => ({
+      simulatedCosts: {
+        ...state.simulatedCosts,
+        [chain]: cost,
+      },
+    })),
 }))
 
 // ✅ Utility to convert gas history to 15-minute OHLC candles

@@ -10,7 +10,9 @@ const POOL_ABI = [
 ];
 
 // ✅ Use WSS for live updates
-const provider = new WebSocketProvider("wss://mainnet.infura.io/ws/v3/64c5c4fd9487432bb6be33ae45fe6300");
+const provider = new WebSocketProvider(
+  "wss://mainnet.infura.io/ws/v3/64c5c4fd9487432bb6be33ae45fe6300"
+);
 
 export default function useEthUsdFeed() {
   const setUsdPrice = useGasStore((s) => s.setUsdPrice);
@@ -19,19 +21,27 @@ export default function useEthUsdFeed() {
     const pool = new Contract(POOL_ADDRESS, POOL_ABI, provider);
 
     function priceFrom(sqrtPriceX96: bigint): number {
-      const numerator = sqrtPriceX96 ** 2n * 10n ** 12n;
+      const numerator = sqrtPriceX96 * sqrtPriceX96;
       const denominator = 2n ** 192n;
-      return Number(numerator / denominator) / 1e6; // Normalize for USDC decimals
+
+      // This will give price * 1e6 (because USDC has 6 decimals)
+      const rawPrice = numerator / denominator;
+
+      // Convert from rawPrice (1e6 scaled) to float
+      return Number(rawPrice) / 1e6;
     }
 
     // 1️⃣ Initial slot0 price
-    pool.slot0().then((slot: any) => {
-      const price = priceFrom(BigInt(slot.sqrtPriceX96));
-      console.log("✅ Initial ETH/USD from slot0():", price);
-      setUsdPrice(price);
-    }).catch((err) => {
-      console.error("❌ slot0() fetch failed:", err);
-    });
+    pool
+      .slot0()
+      .then((slot: any) => {
+        const price = priceFrom(BigInt(slot.sqrtPriceX96));
+        console.log("✅ Initial ETH/USD from slot0():", price);
+        setUsdPrice(price);
+      })
+      .catch((err) => {
+        console.error("❌ slot0() fetch failed:", err);
+      });
 
     // 2️⃣ Real-time Swap events
     const onSwap = (
