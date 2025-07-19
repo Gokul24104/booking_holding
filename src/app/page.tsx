@@ -1,11 +1,11 @@
 "use client";
 
-import { useGasFeed } from "@/hooks/useGasFeed";
-import { useEthUsdFeed } from "@/hooks/useEthUsdFeed";
+import  useEthUsdFeed  from "@/hooks/useEthUsdFeed";
 import { useGasStore } from "@/store/useGasStore";
 import { GasCard } from "@/components/GasCard";
 import { SimulationPanel } from "@/components/SimulationPanel";
-import GasChartWrapper from "@/components/GasChartWrapper"; // <-- ✅ import chart wrapper
+import GasChartWrapper from "@/components/GasChartWrapper";
+import  useGasFeed  from "@/hooks/useGasFeed";
 
 export default function Home() {
   useGasFeed();
