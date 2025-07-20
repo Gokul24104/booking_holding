@@ -1,87 +1,128 @@
 import { useEffect } from "react";
 import {
-  WebSocketProvider,
   JsonRpcProvider,
+  WebSocketProvider,
   formatUnits,
-  Provider,
+  FeeData,
 } from "ethers";
-import { useGasStore } from "../store/useGasStore";
+import { useGasStore } from "@/store/useGasStore";
+import { UTCTimestamp, CandlestickData } from "lightweight-charts";
 
 type Chain = "ethereum" | "polygon" | "arbitrum";
 
 const RPCS: Record<Chain, string> = {
-  ethereum: "wss://mainnet.infura.io/ws/v3/64c5c4fd9487432bb6be33ae45fe6300",
-  polygon: "https://polygon-mainnet.infura.io/v3/93727e51c27c4f0a96a80507f2bed9c1",
-  arbitrum: "wss://arb-mainnet.g.alchemy.com/v2/GoWn1sSDa01QBMXTXnjlL",
+  ethereum: "https://mainnet.infura.io/v3/64c5c4fd9487432bb6be33ae45fe6300",
+  polygon:
+    "https://polygon-mainnet.infura.io/v3/93727e51c27c4f0a96a80507f2bed9c1",
+  arbitrum: "https://arb-mainnet.g.alchemy.com/v2/GoWn1sSDa01QBMXTXnjlL",
 };
 
 export default function useGasFeed() {
   const updateChainData = useGasStore((state) => state.updateChainData);
+  const updateCandlestickData = useGasStore.getState().updateCandlestickData;
 
   useEffect(() => {
-    const providers: Partial<Record<Chain, Provider>> = {};
+    const providers: Partial<
+      Record<Chain, JsonRpcProvider | WebSocketProvider>
+    > = {};
+    const intervals: Record<Chain, NodeJS.Timeout> = {} as any;
 
-    (["ethereum", "polygon", "arbitrum"] as Chain[]).forEach((chain) => {
-      const rpcUrl = RPCS[chain];
-      const provider = rpcUrl.startsWith("wss")
-        ? new WebSocketProvider(rpcUrl)
-        : new JsonRpcProvider(rpcUrl);
+    const setupChain = (chain: Chain) => {
+      const rpc = RPCS[chain];
+      const provider = rpc.startsWith("wss")
+        ? new WebSocketProvider(rpc)
+        : new JsonRpcProvider(rpc);
 
       providers[chain] = provider;
 
-      provider.on("block", async (blockNumber: number) => {
+      const fetchGas = async () => {
         try {
-          let baseFeeGwei = 0;
-          let priorityFeeGwei = 0;
+          const feeData: FeeData = await provider.getFeeData();
+          const block = await provider.getBlock("latest");
 
-          const block = await provider.getBlock(blockNumber);
-          if (!block) return;
+          let baseFee = 0;
+          let priorityFee = 0;
+          let totalGasPrice = 0;
 
-          if (chain === "polygon") {
-            const fallback = new JsonRpcProvider(rpcUrl);
-            const gasPrice = await fallback.send("eth_gasPrice", []);
-            baseFeeGwei = parseFloat(formatUnits(BigInt(gasPrice), "gwei"));
-            priorityFeeGwei = 0;
-          } else {
-            if (block.baseFeePerGas) {
-              baseFeeGwei = parseFloat(formatUnits(block.baseFeePerGas, "gwei"));
-              priorityFeeGwei = baseFeeGwei; // Estimate for now
-            }
+          if (chain === "ethereum") {
+            const rawBaseFee = block?.baseFeePerGas ?? 0n;
+            const rawMaxFee = feeData.maxFeePerGas ?? 0n;
+            const rawPriority = rawMaxFee - rawBaseFee;
+
+            baseFee = parseFloat(formatUnits(rawBaseFee, "gwei"));
+            priorityFee = parseFloat(formatUnits(rawPriority, "gwei"));
+            totalGasPrice = parseFloat(formatUnits(rawMaxFee, "gwei"));
+          } else if (chain === "polygon") {
+            const rawGasPrice = feeData.gasPrice ?? 0n;
+            totalGasPrice = parseFloat(formatUnits(rawGasPrice, "gwei"));
+            baseFee = totalGasPrice;
+            priorityFee = 0;
+          } else if (chain === "arbitrum") {
+            const rawGasPrice = feeData.gasPrice ?? 0n;
+            totalGasPrice = parseFloat(formatUnits(rawGasPrice, "gwei"));
+            baseFee = totalGasPrice;
+            priorityFee = 0;
           }
 
           updateChainData(chain, {
-            baseFee: baseFeeGwei,
-            priorityFee: priorityFeeGwei,
+            baseFee,
+            priorityFee,
+            gasPrice: totalGasPrice,
           });
+
+          // Candlestick logic...
+          const now = Date.now();
+          const roundedTimestamp =
+            Math.floor(now / (15 * 60 * 1000)) * (15 * 60 * 1000);
+          const time = Math.floor(roundedTimestamp / 1000) as UTCTimestamp;
+
+          const state = useGasStore.getState();
+          const candles = state.chains[chain].candlestickData;
+          const last = candles[candles.length - 1];
+
+          let updatedCandles: CandlestickData[] = [];
+
+          if (!last || last.time !== time) {
+            updatedCandles = [
+              ...candles,
+              {
+                time,
+                open: totalGasPrice,
+                high: totalGasPrice,
+                low: totalGasPrice,
+                close: totalGasPrice,
+              },
+            ];
+          } else {
+            const updated = { ...last };
+            updated.high = Math.max(updated.high, totalGasPrice);
+            updated.low = Math.min(updated.low, totalGasPrice);
+            updated.close = totalGasPrice;
+            updatedCandles = [...candles.slice(0, -1), updated];
+          }
+
+          if (updatedCandles.length > 100) {
+            updatedCandles = updatedCandles.slice(updatedCandles.length - 100);
+          }
+
+          updateCandlestickData(chain, updatedCandles);
+
+          console.log(
+            `[${chain}] base: ${baseFee} Gwei, priority: ${priorityFee} Gwei, total: ${totalGasPrice} Gwei`
+          );
         } catch (err) {
-          console.error(`[${chain}] Error fetching gas data:`, err);
+          console.error(`[${chain}] Gas Fetch Error:`, err);
         }
-      });
+      };
 
-      // Only attach WS error listeners if it's a WebSocketProvider
-      if (provider instanceof WebSocketProvider && provider.websocket) {
-        const socket = provider.websocket as WebSocket;
+      fetchGas();
+      intervals[chain] = setInterval(fetchGas, 15_000);
+    };
 
-        socket.onerror = (e: Event) => {
-          console.error(`[${chain}] WebSocket error:`, e);
-        };
-
-        socket.onclose = (e: CloseEvent) => {
-          console.warn(`[${chain}] WebSocket closed:`, e.code);
-        };
-      }
-    });
+    (["ethereum", "polygon", "arbitrum"] as Chain[]).forEach(setupChain);
 
     return () => {
-      (["ethereum", "polygon", "arbitrum"] as Chain[]).forEach((chain) => {
-        const provider = providers[chain];
-        if (provider && "removeAllListeners" in provider) {
-          provider.removeAllListeners();
-          if ("destroy" in provider && typeof provider.destroy === "function") {
-            (provider as WebSocketProvider).destroy();
-          }
-        }
-      });
+      Object.values(intervals).forEach(clearInterval);
     };
-  }, [updateChainData]);
+  }, []);
 }

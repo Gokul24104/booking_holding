@@ -1,17 +1,14 @@
-'use client'
+// src/components/GasChartWrapper.tsx
+'use client';
 
-import { useState } from 'react'
-import { useGasStore, getCandles } from '@/store/useGasStore'
-import GasChart from './GasChart'
+import { useState } from 'react';
+import GasChart from './GasChart';
 
-const CHAINS = ['ethereum', 'polygon', 'arbitrum'] as const
-type Chain = (typeof CHAINS)[number]
+const CHAINS = ['ethereum', 'polygon', 'arbitrum'] as const;
+type Chain = (typeof CHAINS)[number];
 
 export default function GasChartWrapper() {
-  const [selectedChain, setSelectedChain] = useState<Chain>('ethereum')
-
-  const chainHistory = useGasStore((state) => state.chains[selectedChain].history)
-  const candles = getCandles(chainHistory)
+  const [selectedChain, setSelectedChain] = useState<Chain>('ethereum');
 
   return (
     <div className="mt-10">
@@ -36,11 +33,8 @@ export default function GasChartWrapper() {
         </div>
       </div>
 
-      {candles.length > 0 ? (
-        <GasChart data={candles} />
-      ) : (
-        <p className="text-zinc-400 mt-4">No gas data available for {selectedChain}.</p>
-      )}
+      {/* ✅ Just pass the selected chain, GasChart will get its own data */}
+      <GasChart chain={selectedChain} />
     </div>
-  )
+  );
 }
