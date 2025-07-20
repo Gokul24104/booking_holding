@@ -134,7 +134,7 @@ export default function Home() {
 
         {/* Footer */}
         <footer className="mt-12 text-center text-sm text-zinc-600 dark:text-zinc-500">
-          Powered by EVM RPC + Uniswap V3 | Built by Gokul
+          Powered by EVM RPC + Uniswap V3 
         </footer>
       </main>
     </div>
