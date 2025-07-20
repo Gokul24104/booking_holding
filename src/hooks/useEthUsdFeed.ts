@@ -53,7 +53,6 @@ export default function useEthUsdFeed() {
         console.error("❌ slot0() fetch failed:", err);
       });
 
-    // 2️⃣ Listen for Swap events
     const onSwap = (
       _sender: string,
       _recipient: string,
@@ -70,7 +69,6 @@ export default function useEthUsdFeed() {
 
     pool.on("Swap", onSwap);
 
-    // 3️⃣ Poll fallback every 10s
     const interval = setInterval(async () => {
       try {
         const slot = await pool.slot0();
