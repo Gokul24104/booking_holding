@@ -12,8 +12,7 @@ type Chain = "ethereum" | "polygon" | "arbitrum";
 
 const RPCS: Record<Chain, string> = {
   ethereum: "https://mainnet.infura.io/v3/64c5c4fd9487432bb6be33ae45fe6300",
-  polygon:
-    "https://polygon-mainnet.infura.io/v3/93727e51c27c4f0a96a80507f2bed9c1",
+  polygon:"https://polygon-mainnet.infura.io/v3/93727e51c27c4f0a96a80507f2bed9c1",
   arbitrum: "https://arb-mainnet.g.alchemy.com/v2/GoWn1sSDa01QBMXTXnjlL",
 };
 

@@ -20,29 +20,12 @@ export default function useEthUsdFeed() {
   useEffect(() => {
     // IMPORTANT: Move provider initialization inside useEffect
     const provider = new WebSocketProvider(
-      process.env.NEXT_PUBLIC_ETH_RPC_WSS_UNISWAP || "wss://mainnet.infura.io/ws/v3/YOUR_INFURA_PROJECT_ID"
+      process.env.NEXT_PUBLIC_ETH_RPC_WSS_UNISWAP || "https://mainnet.infura.io/v3/64c5c4fd9487432bb6be33ae45fe6300"
     );
     const pool = new Contract(POOL_ADDRESS, POOL_ABI, provider);
 
     // Corrected price calculation function for WETH/USDC
     function priceFrom(sqrtPriceX96: bigint): number {
-      // The price `P` stored in Uniswap V3 is `P = (sqrtPriceX96 / (2^96))^2`.
-      // This `P` represents the ratio of `amount_token1 / amount_token0` in terms of their *smallest units*.
-      // For this pool (0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640):
-      // Token0 is USDC (6 decimals)
-      // Token1 is WETH (18 decimals)
-      // We want price of 1 WETH in USD (USDC). So, `price = USDC_amount / WETH_amount`.
-      // This is `token0_value / token1_value`.
-
-      // The `P` from Uniswap is `(amount_WETH_smallest_unit / amount_USDC_smallest_unit)`.
-      // So, `(sqrtPriceX96 / 2^96)^2` gives `WETH_raw / USDC_raw`.
-      // We want `USDC_raw / WETH_raw`. So we need the reciprocal of `P`.
-      // `inverted_P = 1 / P = (2^192) / (sqrtPriceX96^2)`
-
-      // Then, we need to adjust for the token decimals to get the human-readable price:
-      // `final_price = inverted_P * (10^decimals_token1 / 10^decimals_token0)`
-      // `final_price = ((2^192) / (sqrtPriceX96^2)) * (10^WETH_DECIMALS / 10^USDC_DECIMALS)`
-
       const Q192 = 2n ** 192n;
       const sqrtPriceX96Squared = sqrtPriceX96 * sqrtPriceX96;
 
@@ -51,7 +34,6 @@ export default function useEthUsdFeed() {
       const termNumerator = Q192 * (10n ** BigInt(WETH_DECIMALS));
       const termDenominator = sqrtPriceX96Squared * (10n ** BigInt(USDC_DECIMALS));
 
-      // To maintain precision for BigInt division, multiply by a large factor before division
       const precisionFactor = 1_000_000_000_000_000_000n; // 1e18 for sufficient precision
 
       const ethUsdPriceBigInt = (termNumerator * precisionFactor) / termDenominator;
